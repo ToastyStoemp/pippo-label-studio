@@ -39,8 +39,9 @@ function barcodeLayout(bits,w,h){
  const module=(w-16)/(bits.length+20);
  if(module<1)throw new Error('This item code is too long for this label width. Increase the width or use a shorter valid item code.');
  const availableHeight=h-92;
- // Balance the original 32% height with the expanded barcode-first layout.
- const barH=Math.round((Math.min(availableHeight,Math.round(h*.32))+availableHeight)/2);
+ // Stay close to the original height, keeping a quarter of the extra barcode space.
+ const originalHeight=Math.min(availableHeight,Math.round(h*.32));
+ const barH=Math.round(originalHeight+(availableHeight-originalHeight)*.25);
  const x0=(w-bits.length*module)/2,barY=62+Math.floor((availableHeight-barH)/2);
  return {module,x0,barY,barH};
 }

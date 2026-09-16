@@ -14,7 +14,7 @@ vm.runInContext(String.raw`(()=>{
   if(g.barH<54||g.barY<62||g.barY+g.barH>h*8-30)throw Error('Vertical bounds');
  }
  const small=barcodeLayout(bits,304,200);
- if(bits.length*small.module<250||small.barH!==86||small.barY!==73)throw Error('38x25 barcode must retain full width and balanced height');
+ if(bits.length*small.module<250||small.barH!==75||small.barY!==78)throw Error('38x25 barcode must retain full width and a height closer to the original');
  const a=barcodeLayout(bits,303,200),b=barcodeLayout(bits,304,200);
  if(b.module-a.module>0.01)throw Error('Abrupt width transition');
 })()`,context);
