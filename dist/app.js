@@ -1,6 +1,26 @@
 'use strict';
 const sampleRows=[['knpip1169','Kommissionssalg',0,'Active'],['kbpip1169','Kommissionssalg (brugt)',0,'Active'],...['Mei','Daiki','Ginkgo','Sakura'].flatMap((n,i)=>[['kbpip11690000'+(41+i*2),'Hat - '+n+' - S',299,'Active'],['kbpip11690000'+(42+i*2),'Hat - '+n+' - M',299,'Sold']]),...['BLUE','BEAR','DAIKI','FLOWERS','ZODIAC','GREEN'].map((n,i)=>['kbpip116900000'+(i+1),'Sheet '+n,59,i===5?'Printed':'Sold']),...['BOUQUET','OCEAN','CHONKY','MATCHA'].map((n,i)=>['kbpip11690000'+String(i+7).padStart(2,'0'),'Bundle '+n,79,'Printed']),...['KYOTO - A3','SKY - A3','PEACH - 30x30','SUSHIBAR - 45x20'].map((n,i)=>['kbpip116900012'+(i+1),'Print - '+n,i===2?269:299,'Active']),...['LUCKY','FOX','BEAR','ZODIAC','AUTUMN'].map((n,i)=>['kbpip116900008'+(i+1),'pin - '+n,i<2?119:89,'Active']),...['KYOTO - A4','SKY - A4','OSLO - A4','BIRDHOUSE - A4','THANKYOU - A4','KITCHEN - A4','FREETIME - A4','VALLEY - 50X30cm'].map((n,i)=>['kbpip116900016'+(i+1),'Print - '+n,i===7?379:189,'Draft'])];
 const $=id=>document.getElementById(id);
+const settingsStorageKey='pippo.labelSettings.v1';
+const savedSettingRules={
+ width:v=>typeof v==='string'&&v.trim()!==''&&Number.isFinite(Number(v))&&Number(v)>=20&&Number(v)<=50,
+ height:v=>typeof v==='string'&&v.trim()!==''&&Number.isFinite(Number(v))&&Number(v)>=20&&Number(v)<=80,
+ location:v=>typeof v==='string'&&v.length<=16,
+ btDensity:v=>['6','8','10','12','15'].includes(v),
+ btSpeed:v=>['1','2','3','4','5'].includes(v)
+};
+let savedSettings={};
+function restoreSettings(){
+ try{
+  const stored=JSON.parse(localStorage.getItem(settingsStorageKey));
+  if(!stored||typeof stored!=='object'||Array.isArray(stored))return;
+  for(const [id,valid] of Object.entries(savedSettingRules))if(valid(stored[id])){savedSettings[id]=stored[id];$(id).value=stored[id];}
+ }catch{} // Storage may be unavailable or contain an invalid older value.
+}
+function saveSettings(){
+ for(const [id,valid] of Object.entries(savedSettingRules)){const value=$(id).value;if(valid(value))savedSettings[id]=value;}
+ try{localStorage.setItem(settingsStorageKey,JSON.stringify(savedSettings));}catch{}
+}
 const escapeXML=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));
 let products=[],preview=0;
 function parseProducts(text){
@@ -45,8 +65,8 @@ function barcodeLayout(bits,w,h){
  const x0=(w-bits.length*module)/2,barY=62+Math.floor((availableHeight-barH)/2);
  return {module,x0,barY,barH};
 }
-function makeLabel(p){
- const s=settings(),w=Math.round(s.w*8),h=Math.round(s.h*8),margin=8;
+function makeLabel(p,s=settings()){
+ const w=Math.round(s.w*8),h=Math.round(s.h*8),margin=8;
  const encoded={};JsBarcode(encoded,p.code,{format:'CODE128',displayValue:false,margin:0});
  const bits=encoded.encodings.map(e=>e.data).join('');
  const {module,x0,barY,barH}=barcodeLayout(bits,w,h);
@@ -68,6 +88,7 @@ function renderPreview(){
  if(total>2000)problem='Limit each print batch to 2,000 labels. Reduce quantities or select fewer products.';
  $('sizeWarning').textContent=problem|| (s.w<40?'Small labels use narrower barcode bars. Test-scan before printing a batch.':'');
  $('print').disabled=!!problem||!total;$('download').disabled=!!problem||!total;
+ if(typeof window.refreshBluetooth==='function')window.refreshBluetooth();
 }
 $('generate').onclick=()=>importProducts($('source').value);
 $('sample').onclick=()=>{$('source').value=sampleRows.map(([code,name,price,status])=>[code,name,price.toFixed(2),price.toFixed(2),status].join('\t')).join('\n');importProducts($('source').value);};
@@ -75,11 +96,13 @@ $('filter').onchange=renderRows;
 $('all').onchange=()=>{for(const {p} of visible())p.selected=$('all').checked;renderRows()};
 $('active').onclick=()=>{products.forEach(p=>p.selected=p.status==='Active'&&p.price>0);renderRows()};
 $('rows').onchange=e=>{if(e.target.dataset.select!==undefined){products[Number(e.target.dataset.select)].selected=e.target.checked;renderRows();}if(e.target.dataset.qty!==undefined){const p=products[Number(e.target.dataset.qty)];p.qty=Math.max(1,Math.min(100,Math.floor(Number(e.target.value)||1)));e.target.value=p.qty;renderPreview();}};
-for(const id of ['width','height','location'])$(id).oninput=renderPreview;
+for(const id of ['width','height','location'])$(id).oninput=()=>{saveSettings();renderPreview();};
+for(const id of ['btDensity','btSpeed'])$(id).onchange=saveSettings;
 $('prev').onclick=()=>{preview--;renderPreview()};$('next').onclick=()=>{preview++;renderPreview()};
 $('helpToggle').onclick=()=>{$('help').hidden=!$('help').hidden;$('helpToggle').setAttribute('aria-expanded',String(!$('help').hidden))};
 $('print').onclick=()=>{const s=settings();$('pageStyle').textContent=`@page{size:${s.w}mm ${s.h}mm;margin:0}#printArea .print-label{width:${s.w}mm;height:${s.h}mm}`;$('printArea').innerHTML=selected().flatMap(p=>Array.from({length:p.qty},()=>`<div class="print-label">${makeLabel(p)}</div>`)).join('');window.print();};
 $('download').onclick=()=>{const p=selected()[preview],svg=makeLabel(p),s=settings(),blob=new Blob([svg],{type:'image/svg+xml'}),url=URL.createObjectURL(blob),img=new Image();img.onload=()=>{const canvas=document.createElement('canvas');canvas.width=Math.round(s.w*8);canvas.height=Math.round(s.h*8);const ctx=canvas.getContext('2d');ctx.imageSmoothingEnabled=false;ctx.drawImage(img,0,0);URL.revokeObjectURL(url);canvas.toBlob(b=>{const a=document.createElement('a'),u=URL.createObjectURL(b);a.href=u;a.download=p.code.replace(/[^a-z0-9_-]/gi,'_')+'.png';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);});};img.src=url;};
 if(document.modelContext?.registerTool){try{Promise.resolve(document.modelContext.registerTool({name:'import_product_labels',description:'Parse a pasted product list and stage barcode labels in the visible interface. Does not print.',inputSchema:{type:'object',properties:{text:{type:'string'}},required:['text'],additionalProperties:false},annotations:{readOnlyHint:false,untrustedContentHint:true},execute(input){if(typeof input?.text!=='string'||!input.text.trim())throw new Error('A nonempty product list is required.');$('source').value=input.text;return importProducts(input.text);}})).catch(()=>{});}catch{}}
+restoreSettings();
 $('sample').click();
 

@@ -29,7 +29,10 @@ jobs:
       - name: Verify labels and static assets
         run: |
           node --check dist/app.js
+          node --check dist/m110.js
+          node --check dist/bluetooth.js
           node verify.cjs
+          node verify-bluetooth.cjs
           test -s dist/index.html
           test -s dist/style.css
           test -s dist/JsBarcode.all.min.js
