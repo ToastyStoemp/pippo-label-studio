@@ -33,19 +33,25 @@ function renderRows(){
  const v=visible();$('all').checked=v.length>0&&v.every(({p})=>p.selected);$('all').indeterminate=v.some(({p})=>p.selected)&&!$('all').checked;renderPreview();
 }
 function settings(){const w=Number($('width').value),h=Number($('height').value);return {w,h,location:$('location').value,valid:Number.isFinite(w)&&w>=20&&w<=50&&Number.isFinite(h)&&h>=20&&h<=80}}
+function barcodeLayout(bits,w,h){
+ // Reserve 1 mm at each label edge plus Code 128's 10-module quiet zones.
+ // Keep the vector module proportional: flooring it halved the barcode at 38 mm.
+ const module=(w-16)/(bits.length+20);
+ if(module<1)throw new Error('This item code is too long for this label width. Increase the width or use a shorter valid item code.');
+ const x0=(w-bits.length*module)/2,barY=62,barH=h-barY-30;
+ return {module,x0,barY,barH};
+}
 function makeLabel(p){
- const s=settings(),w=Math.round(s.w*8),h=Math.round(s.h*8),margin=16;
+ const s=settings(),w=Math.round(s.w*8),h=Math.round(s.h*8),margin=8;
  const encoded={};JsBarcode(encoded,p.code,{format:'CODE128',displayValue:false,margin:0});
  const bits=encoded.encodings.map(e=>e.data).join('');
- // Integer printer dots keep narrow bars sharp on the M110's 203 dpi print head.
- const module=Math.floor((w-32)/(bits.length+20));
- if(module<1)throw new Error('This item code is too long for this label width. Increase the width or use a shorter valid item code.');
- const x0=Math.round((w-bits.length*module)/2),barY=Math.round(h*.46),barH=Math.max(40,Math.round(h*.32));
- let bars='';for(let i=0;i<bits.length;i++)if(bits[i]==='1')bars+=`<rect x="${x0+i*module}" y="${barY}" width="${module}" height="${barH}"/>`;
+ const {module,x0,barY,barH}=barcodeLayout(bits,w,h);
+ // Render each contiguous black run as one rectangle, avoiding seams between modules.
+ let bars='';for(let i=0;i<bits.length;){if(bits[i]!=='1'){i++;continue;}const start=i;while(bits[i]==='1')i++;bars+=`<rect x="${x0+start*module}" y="${barY}" width="${(i-start)*module}" height="${barH}"/>`;}
  const c=document.createElement('canvas').getContext('2d');
  function fit(t,size,max,bold=false){c.font=`${bold?'bold ':''}${size}px Arial`;return Math.min(size,size*max/Math.max(1,c.measureText(t).width));}
- const price='DKK '+money(p.price),locSize=fit(s.location,20,w*.26),priceSize=fit(price,28,s.location?w*.63:w-32,true),nameSize=fit(p.name,25,w-32),codeSize=fit(p.code,23,w-32);
- return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="${escapeXML(p.name)} label"><rect width="${w}" height="${h}" fill="white"/><g fill="black" font-family="Arial,Helvetica,sans-serif"><text x="${margin}" y="${Math.round(h*.19)}" font-size="${priceSize}" font-weight="700">${price}</text><text x="${w-margin}" y="${Math.round(h*.19)}" text-anchor="end" font-size="${locSize}">${escapeXML(s.location)}</text><text x="${margin}" y="${Math.round(h*.365)}" font-size="${nameSize}">${escapeXML(p.name)}</text><path d="M${margin} ${Math.round(h*.40)}H${w-margin}" stroke="black" stroke-width="1.5"/><g shape-rendering="crispEdges">${bars}</g><text x="${margin}" y="${Math.round(h*.91)}" font-size="${codeSize}">${escapeXML(p.code)}</text></g></svg>`;
+ const price='DKK '+money(p.price),locSize=fit(s.location,17,w*.26),priceSize=fit(price,24,s.location?w*.63:w-16,true),nameSize=fit(p.name,20,w-16),codeSize=fit(p.code,18,w-16);
+ return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="${escapeXML(p.name)} label"><rect width="${w}" height="${h}" fill="white"/><g fill="black" font-family="Arial,Helvetica,sans-serif"><text x="${margin}" y="28" font-size="${priceSize}" font-weight="700">${price}</text><text x="${w-margin}" y="28" text-anchor="end" font-size="${locSize}">${escapeXML(s.location)}</text><text x="${margin}" y="51" font-size="${nameSize}">${escapeXML(p.name)}</text><path d="M${margin} 55H${w-margin}" stroke="black" stroke-width="1"/><g data-barcode="true" shape-rendering="crispEdges">${bars}</g><text x="${margin}" y="${h-10}" font-size="${codeSize}">${escapeXML(p.code)}</text></g></svg>`;
 }
 function renderPreview(){
  const list=selected(),s=settings();preview=Math.max(0,Math.min(preview,list.length-1));
