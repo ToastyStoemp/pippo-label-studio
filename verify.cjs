@@ -11,10 +11,10 @@ vm.runInContext(String.raw`(()=>{
   const g=barcodeLayout(bits,w*8,h*8);
   if(g.x0+0.00001<10*g.module+8)throw Error('Missing left quiet zone');
   if(w*8-g.x0-bits.length*g.module+0.00001<10*g.module+8)throw Error('Missing right quiet zone');
-  if(g.barH<68||g.barY+g.barH>h*8-30)throw Error('Vertical bounds');
+  if(g.barH<54||g.barY<62||g.barY+g.barH>h*8-30)throw Error('Vertical bounds');
  }
  const small=barcodeLayout(bits,304,200);
- if(bits.length*small.module<250||small.barH!==108)throw Error('38x25 barcode must fill available area');
+ if(bits.length*small.module<250||small.barH!==86||small.barY!==73)throw Error('38x25 barcode must retain full width and balanced height');
  const a=barcodeLayout(bits,303,200),b=barcodeLayout(bits,304,200);
  if(b.module-a.module>0.01)throw Error('Abrupt width transition');
 })()`,context);
